@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import torch
 import warp as wp
+from newton import ModelBuilder, solvers
 from newton._src.usd.schemas import SchemaResolverNewton, SchemaResolverPhysx
 
 from pxr import Usd, UsdGeom
@@ -16,7 +17,6 @@ from pxr import Usd, UsdGeom
 from isaaclab.physics.scene_data_requirements import VisualizerPrebuiltArtifacts
 
 from isaaclab_newton.physics import NewtonManager
-from newton import ModelBuilder, solvers
 
 
 def _build_newton_builder_from_mapping(
