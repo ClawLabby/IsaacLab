@@ -15,6 +15,8 @@ from isaaclab_tasks.utils import PresetCfg
 @configclass
 class MultiBackendRendererCfg(PresetCfg):
     default: IsaacRtxRendererCfg = IsaacRtxRendererCfg()
+    newton: NewtonWarpRendererCfg = NewtonWarpRendererCfg()
     newton_renderer: NewtonWarpRendererCfg = NewtonWarpRendererCfg()
     ovrtx_renderer: OVRTXRendererCfg = OVRTXRendererCfg()
     isaacsim_rtx_renderer = default
+    physx = default
