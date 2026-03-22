@@ -906,7 +906,18 @@ class AppLauncher:
             # global rank (GPU id) in multi-gpu multi-node mode
             self.global_rank = int(os.getenv("RANK", "0")) + int(os.getenv("JAX_RANK", "0"))
 
-            self.device_id = self.local_rank
+            # When CUDA_VISIBLE_DEVICES restricts each process to a single GPU,
+            # local_rank may exceed the visible device count. Fall back to cuda:0
+            # so the process uses the one GPU it can see.
+            import torch
+
+            num_visible_gpus = torch.cuda.device_count()
+            world_size = int(os.getenv("WORLD_SIZE", "1"))
+            if num_visible_gpus >= world_size:
+                self.device_id = self.local_rank
+            else:
+                self.device_id = 0
+
             device = "cuda:" + str(self.device_id)
             launcher_args["multi_gpu"] = False
             # limit CPU threads to minimize thread context switching
@@ -923,6 +934,14 @@ class AppLauncher:
         # as the active_gpu device. Setting physics_gpu explicitly may result in a different device to be used.
         launcher_args["physics_gpu"] = self.device_id
         launcher_args["active_gpu"] = self.device_id
+
+        # Set the current CUDA device early so that physics backends (e.g. Newton/Warp)
+        # that allocate on the "current" device during initialization get the correct GPU.
+        # Without this, all ranks may default to cuda:0 for early allocations.
+        if "cuda" in device:
+            import torch
+
+            torch.cuda.set_device(self.device_id)
 
         logger.info("Using device: %s", device)
 

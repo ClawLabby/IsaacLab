@@ -122,6 +122,11 @@ def _is_kit_camera(node) -> bool:
         return True
     if isinstance(renderer_cfg, RendererCfg):
         return renderer_cfg.renderer_type in ("default", "isaac_rtx")
+    # PresetCfg renderers (e.g. MultiBackendRendererCfg) are resolved later;
+    # assume they will match the physics backend, so not necessarily Kit.
+    from isaaclab_tasks.utils import PresetCfg
+    if isinstance(renderer_cfg, PresetCfg):
+        return False
     return True
 
 
