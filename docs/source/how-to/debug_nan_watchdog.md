@@ -12,6 +12,32 @@ The NaN watchdog (`isaaclab.utils.nan_watchdog.NaNWatchdog`) provides:
 3. **Continue-after-NaN** — affected envs are reset, training continues
 4. **Offline replay** — reproduce the exact physics failure
 
+## Quick Start
+
+Enable the NaN watchdog by setting an environment variable before training:
+
+```bash
+# Enable NaN watchdog with automatic recovery
+NAN_WATCHDOG=1 torchrun --nproc_per_node=4 \
+  scripts/reinforcement_learning/rsl_rl/train.py \
+  --task Isaac-Dexsuite-Kuka-Allegro-Lift-v0 \
+  --headless --distributed presets=newton,cube
+```
+
+When a NaN is detected, the watchdog will:
+1. Log an error with affected environment indices
+2. Save a dump to `<log_dir>/nan_dumps/`
+3. Replace NaN values with zeros and mark affected envs as done
+4. Continue training (affected envs will auto-reset)
+
+Optional configuration via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NAN_WATCHDOG` | `0` | Set to `1` to enable |
+| `NAN_WATCHDOG_DIR` | `<log_dir>/nan_dumps` | Custom dump directory |
+| `NAN_WATCHDOG_MAX_DUMPS` | `3` | Maximum dumps to save (prevents disk fill) |
+
 ## How It Works
 
 ```
