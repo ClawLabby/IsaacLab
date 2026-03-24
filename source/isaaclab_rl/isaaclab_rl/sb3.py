@@ -28,6 +28,7 @@ import torch
 import torch.nn as nn  # noqa: F401
 from stable_baselines3.common.preprocessing import is_image_space, is_image_space_channels_first
 from stable_baselines3.common.utils import constant_fn
+from isaaclab_rl.utils.nan_watchdog_mixin import NaNWatchdogMixin
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvObs, VecEnvStepReturn
 
 if TYPE_CHECKING:
@@ -95,7 +96,7 @@ Vectorized environment wrapper.
 """
 
 
-class Sb3VecEnvWrapper(VecEnv):
+class Sb3VecEnvWrapper(NaNWatchdogMixin, VecEnv):
     """Wraps around Isaac Lab environment for Stable Baselines3.
 
     Isaac Sim internally implements a vectorized environment. However, since it is
@@ -252,6 +253,9 @@ class Sb3VecEnvWrapper(VecEnv):
         obs_dict, rew, terminated, truncated, extras = self.env.step(self._async_actions)
         # compute reset ids
         dones = terminated | truncated
+
+        # NaN watchdog: detect, dump, and recover (modifies tensors in-place)
+        self._check_nan(obs_dict, rew, dones, self._async_actions)
 
         # convert data types to numpy depending on backend
         # note: ManagerBasedRLEnv uses torch backend (by default).

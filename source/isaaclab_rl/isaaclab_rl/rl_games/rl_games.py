@@ -10,7 +10,8 @@ for RL-Games :class:`Runner` class:
 
 .. code-block:: python
 
-    from rl_games.common import env_configurations, vecenv
+    from isaaclab_rl.utils.nan_watchdog_mixin import NaNWatchdogMixin
+from rl_games.common import env_configurations, vecenv
 
     from isaaclab_rl.rl_games import RlGamesGpuEnv, RlGamesVecEnvWrapper
 
@@ -41,6 +42,7 @@ from typing import TYPE_CHECKING
 import gym.spaces  # needed for rl-games incompatibility: https://github.com/Denys88/rl_games/issues/261
 import gymnasium
 import torch
+from isaaclab_rl.utils.nan_watchdog_mixin import NaNWatchdogMixin
 from rl_games.common import env_configurations
 from rl_games.common.vecenv import IVecEnv
 
@@ -60,7 +62,7 @@ Vectorized environment wrapper.
 """
 
 
-class RlGamesVecEnvWrapper(IVecEnv):
+class RlGamesVecEnvWrapper(NaNWatchdogMixin, IVecEnv):
     """Wraps around Isaac Lab environment for RL-Games.
 
     This class wraps around the Isaac Lab environment. Since RL-Games works directly on
@@ -303,6 +305,9 @@ class RlGamesVecEnvWrapper(IVecEnv):
         actions = torch.clamp(actions, -self._clip_actions, self._clip_actions)
         # perform environment step
         obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
+        # NaN watchdog: detect, dump, and recover (modifies tensors in-place)
+        dones_for_nan = (terminated | truncated).to(dtype=torch.long)
+        self._check_nan(obs_dict, rew, dones_for_nan, actions)
 
         # move time out information to the extras dict
         # this is only needed for infinite horizon tasks
