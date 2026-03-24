@@ -61,12 +61,7 @@ def _run_with_injection(args, dump_dir):
     # directly with a mock that simulates the training loop
     from isaaclab.utils.nan_watchdog import NaNWatchdog
 
-    watchdog = NaNWatchdog(
-        env=None,
-        dump_dir=dump_dir,
-        history_size=args.history,
-        max_dumps=3,
-    )
+    watchdog = NaNWatchdog(dump_dir=dump_dir, max_dumps=3)
 
     print("Running simulated training loop with NaN injection...")
     nan_detected = False
@@ -85,7 +80,7 @@ def _run_with_injection(args, dump_dir):
             obs["policy"][17, 50] = float('nan')
             obs["policy"][42, :] = float('nan')
 
-        nan_envs = watchdog.step(obs, rewards, dones, actions, step=step)
+        nan_envs = watchdog.check(obs, rewards, dones, actions, step=step)
 
         if nan_envs:
             nan_detected = True
@@ -129,12 +124,7 @@ def _run_without_injection(args, dump_dir):
     import torch
     from isaaclab.utils.nan_watchdog import NaNWatchdog
 
-    watchdog = NaNWatchdog(
-        env=None,
-        dump_dir=dump_dir,
-        history_size=args.history,
-        max_dumps=3,
-    )
+    watchdog = NaNWatchdog(dump_dir=dump_dir, max_dumps=3)
 
     num_steps = 1000
     obs = {"policy": torch.randn(args.num_envs, 157, device="cuda" if torch.cuda.is_available() else "cpu")}
@@ -147,7 +137,7 @@ def _run_without_injection(args, dump_dir):
 
     start = time.perf_counter()
     for step in range(num_steps):
-        watchdog.step(obs, rewards, dones, actions, step=step)
+        watchdog.check(obs, rewards, dones, actions, step=step)
     if torch.cuda.is_available():
         torch.cuda.synchronize()
     elapsed = (time.perf_counter() - start) / num_steps * 1e6
