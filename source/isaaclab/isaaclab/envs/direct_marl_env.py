@@ -521,33 +521,44 @@ class DirectMARLEnv(gym.Env):
         if self.render_mode == "human" or self.render_mode is None:
             return None
         elif self.render_mode == "rgb_array":
-            # check that if any render could have happened
-            if not self.sim.has_gui and not self.sim.has_offscreen_render:
+            # Check that some rendering backend is available: Kit (GUI/offscreen), or Newton visualizer.
+            has_visualizers = bool(self.sim._visualizers)
+            if not (self.sim.has_gui or self.sim.has_offscreen_render or has_visualizers):
                 raise RuntimeError(
-                    f"Cannot render '{self.render_mode}' - no GUI and offscreen rendering not enabled."
-                    " If running headless, make sure --enable_cameras is set."
+                    f"Cannot render '{self.render_mode}' - no rendering backend available."
+                    " If running headless, use --enable_cameras (Kit) or --viz newton."
                 )
-            # create the annotator if it does not exist
-            if not hasattr(self, "_rgb_annotator"):
-                import omni.replicator.core as rep
 
-                # create render product
-                self._render_product = rep.create.render_product(
-                    self.cfg.viewer.cam_prim_path, self.cfg.viewer.resolution
-                )
-                # create rgb annotator -- used to read data from the render product
-                self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
-                self._rgb_annotator.attach([self._render_product])
-            # obtain the rgb data
-            rgb_data = self._rgb_annotator.get_data()
-            # convert to numpy array
-            rgb_data = np.frombuffer(rgb_data, dtype=np.uint8).reshape(*rgb_data.shape)
-            # return the rgb data
-            # note: initially the renderer is warming up and returns empty data
-            if rgb_data.size == 0:
-                return np.zeros((self.cfg.viewer.resolution[1], self.cfg.viewer.resolution[0], 3), dtype=np.uint8)
-            else:
+            # Path 1: Kit replicator (requires omni.replicator / Isaac Sim)
+            if self.sim.has_gui or self.sim.has_offscreen_render:
+                if not hasattr(self, "_rgb_annotator"):
+                    import omni.replicator.core as rep
+
+                    self._render_product = rep.create.render_product(
+                        self.cfg.viewer.cam_prim_path, self.cfg.viewer.resolution
+                    )
+                    self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
+                    self._rgb_annotator.attach([self._render_product])
+                rgb_data = self._rgb_annotator.get_data()
+                rgb_data = np.frombuffer(rgb_data, dtype=np.uint8).reshape(*rgb_data.shape)
+                if rgb_data.size == 0:
+                    return np.zeros(
+                        (self.cfg.viewer.resolution[1], self.cfg.viewer.resolution[0], 3), dtype=np.uint8
+                    )
                 return rgb_data[:, :, :3]
+
+            # Path 2: Newton ViewerGL — get_frame() returns (H, W, 3) uint8 via OpenGL PBO
+            for viz in self.sim._visualizers:
+                viewer = getattr(viz, "_viewer", None)
+                if viewer is not None and hasattr(viewer, "get_frame"):
+                    import warp as wp
+
+                    frame = viewer.get_frame()
+                    return wp.to_torch(frame).cpu().numpy()
+
+            raise RuntimeError(
+                f"Cannot render '{self.render_mode}' - visualizers are active but none support frame capture."
+            )
         else:
             raise NotImplementedError(
                 f"Render mode '{self.render_mode}' is not supported. Please use: {self.metadata['render_modes']}."
