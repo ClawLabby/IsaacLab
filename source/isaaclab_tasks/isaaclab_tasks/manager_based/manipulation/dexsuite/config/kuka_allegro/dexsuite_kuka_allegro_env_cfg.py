@@ -43,7 +43,7 @@ class KukaAllegroPhysicsCfg(PresetCfg):
             solver="newton",
             integrator="implicitfast",
             njmax=300,
-            nconmax=70,
+            nconmax=200,
             impratio=10.0,
             cone="elliptic",
             update_data_interval=2,
