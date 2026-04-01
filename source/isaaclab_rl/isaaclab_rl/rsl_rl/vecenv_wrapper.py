@@ -11,6 +11,8 @@ import torch
 from rsl_rl.env import VecEnv
 from tensordict import TensorDict
 
+from isaaclab_rl.utils.nan_watchdog_mixin import NaNWatchdogMixin
+
 if TYPE_CHECKING:
     from isaaclab.envs import (
         DirectRLEnv,
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
     )
 
 
-class RslRlVecEnvWrapper(VecEnv):
+class RslRlVecEnvWrapper(NaNWatchdogMixin, VecEnv):
     """Wraps around Isaac Lab environment for the RSL-RL library
 
     .. caution::
@@ -79,6 +81,16 @@ class RslRlVecEnvWrapper(VecEnv):
 
         # modify the action space to the clip range
         self._modify_action_space()
+
+        # Initialize NaN watchdog for automatic NaN detection and recovery.
+        # Enabled by default. Disable via env var: NAN_WATCHDOG=0
+        log_dir = getattr(self.unwrapped, "log_dir", None)
+        self._init_nan_watchdog(device=self.device, log_dir=log_dir)
+
+        # When the watchdog is active, it handles NaN detection and recovery in the
+        # wrapper's step() — before rsl_rl's runner sees the data. Expose a flag so
+        # the runner can skip its own hard-crash check_for_nan, avoiding conflicts.
+        self.has_nan_watchdog = self._nan_watchdog is not None
 
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()
@@ -174,6 +186,10 @@ class RslRlVecEnvWrapper(VecEnv):
         obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
         dones = (terminated | truncated).to(dtype=torch.long)
+
+        # NaN watchdog: detect, dump, and recover (modifies tensors in-place)
+        self._check_nan(obs_dict, rew, dones, actions)
+
         # move time out information to the extras dict
         # this is only needed for infinite horizon tasks
         if not self.unwrapped.cfg.is_finite_horizon:
