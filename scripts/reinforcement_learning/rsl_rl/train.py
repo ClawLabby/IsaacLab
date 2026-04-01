@@ -214,6 +214,25 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
         dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
 
+        # save joint ordering for cross-backend policy transfer
+        try:
+            import json
+
+            robot = env.unwrapped.scene.get("robot")
+            if robot is not None:
+                joint_info = {
+                    "joint_names": list(robot.joint_names),
+                    "body_names": list(robot.body_names),
+                    "num_joints": len(robot.joint_names),
+                    "num_bodies": len(robot.body_names),
+                }
+                joint_info_path = os.path.join(log_dir, "joint_names.json")
+                with open(joint_info_path, "w") as f:
+                    json.dump(joint_info, f, indent=2)
+                print(f"[INFO]: Saved joint ordering to {joint_info_path}")
+        except Exception as e:
+            print(f"[WARN]: Could not save joint ordering: {e}")
+
         # run training
         try:
             runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)

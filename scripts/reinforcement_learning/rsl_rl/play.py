@@ -62,6 +62,13 @@ parser.add_argument(
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 parser.add_argument("--external_callback", default=None, help="Fully qualified path to an externally defined callback.")
+parser.add_argument(
+    "--remap-joints",
+    action="store_true",
+    default=False,
+    help="Remap joint ordering when playing a checkpoint trained on a different backend. "
+    "Reads training joint order from joint_names.json in the checkpoint directory.",
+)
 cli_args.add_rsl_rl_args(parser)
 add_launcher_args(parser)
 args_cli, remaining_args = parser.parse_known_args()
@@ -192,6 +199,56 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
         dt = env.unwrapped.step_dt
 
+        # -- Joint remapping for cross-backend play --
+        joint_remapper = None
+        if args_cli.remap_joints:
+            from joint_remapper import JointRemapper
+
+            checkpoint_dir = os.path.dirname(resume_path)
+            train_joint_names = JointRemapper.load_joint_names(checkpoint_dir)
+            if train_joint_names is None:
+                print("[WARN]: --remap-joints specified but no joint_names.json found in checkpoint dir.")
+                print(f"        Expected at: {os.path.join(checkpoint_dir, 'joint_names.json')}")
+                print("        Continuing without remapping.")
+            else:
+                eval_joint_names = env.unwrapped.scene["robot"].joint_names
+                try:
+                    joint_remapper = JointRemapper(train_joint_names, eval_joint_names)
+                    if joint_remapper.needs_remap:
+                        joint_remapper.print_mapping()
+
+                        # Compute observation slices that need joint-order remapping.
+                        # We look for joint_pos, joint_vel, and last_action in the obs layout.
+                        obs_manager = env.unwrapped.observation_manager
+                        obs_remap_slices = []  # list of (start, end) in the flat obs vector
+
+                        # The flat obs is concatenated as: group1_terms | group2_terms | group3_terms
+                        # where group order comes from obs_manager.active_terms.keys()
+                        flat_offset = 0
+                        num_joints = len(eval_joint_names)
+                        for group_name in obs_manager.active_terms:
+                            term_dims = obs_manager.group_obs_term_dim[group_name]
+                            term_names = obs_manager.active_terms[group_name]  # list of term names
+                            for term_name, term_dim in zip(term_names, term_dims):
+                                term_size = 1
+                                for d in term_dim:
+                                    term_size *= d
+                                # Joint-ordered terms: joint_pos, joint_vel, last_action
+                                if term_name in ("joint_pos", "joint_vel", "actions") and term_size == num_joints:
+                                    obs_remap_slices.append((flat_offset, flat_offset + term_size, 1))
+                                    print(f"  [REMAP] Obs term '{term_name}' at [{flat_offset}:{flat_offset + term_size}]")
+                                flat_offset += term_size
+
+                        joint_remapper._obs_remap_slices = obs_remap_slices
+                        print(f"\n[INFO]: Joint remapping active. {joint_remapper.num_mismatched}/{num_joints} joints remapped.")
+                        print(f"[INFO]: {len(obs_remap_slices)} observation slices will be remapped.\n")
+                    else:
+                        print("[INFO]: Joint ordering matches between training and eval. No remapping needed.")
+                        joint_remapper = None
+                except ValueError as e:
+                    print(f"[ERROR]: Cannot remap joints: {e}")
+                    joint_remapper = None
+
         # reset environment
         obs = env.get_observations()
         timestep = 0
@@ -201,8 +258,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 start_time = time.time()
                 # run everything in inference mode
                 with torch.inference_mode():
+                    # remap observations from eval joint order → training joint order
+                    if joint_remapper is not None:
+                        for start, end, dim_per in joint_remapper._obs_remap_slices:
+                            obs[:, start:end] = joint_remapper.remap_joint_obs(obs[:, start:end])
+
                     # agent stepping
                     actions = policy(obs)
+
+                    # remap actions from training joint order → eval joint order
+                    if joint_remapper is not None:
+                        actions = joint_remapper.remap_actions(actions)
+
                     # env stepping
                     obs, _, dones, _ = env.step(actions)
                     # reset recurrent states for episodes that have terminated
