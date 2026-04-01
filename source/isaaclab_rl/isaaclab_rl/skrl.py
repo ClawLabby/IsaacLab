@@ -86,5 +86,11 @@ def SkrlVecEnvWrapper(
             f"Invalid ML framework for skrl: {ml_framework}. Available options are: 'torch', 'jax' or 'jax-numpy'"
         )
 
+    # Wrap with NaN safety before handing to skrl (which has no NaN handling).
+    # This ensures NaN is caught and recovered at the gymnasium level.
+    from isaaclab_rl.utils.nan_safe_wrapper import NaNSafeWrapper
+
+    env = NaNSafeWrapper(env)
+
     # wrap and return the environment
     return wrap_env(env, wrapper)
