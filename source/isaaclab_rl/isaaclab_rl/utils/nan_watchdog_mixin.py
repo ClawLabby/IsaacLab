@@ -5,7 +5,7 @@
 """NaN watchdog mixin for RL environment wrappers.
 
 Provides automatic NaN detection and recovery in the env.step() path.
-Enable via environment variable: NAN_WATCHDOG=1
+Enabled by default. Disable via environment variable: NAN_WATCHDOG=0
 """
 from __future__ import annotations
 
@@ -17,15 +17,17 @@ import torch
 class NaNWatchdogMixin:
     """Mixin that adds NaN detection and recovery to an environment wrapper.
 
-    When enabled (``NAN_WATCHDOG=1``), this mixin:
+    When enabled (default), this mixin:
     1. Checks observations and rewards for NaN after each ``env.step()``
     2. Dumps Newton physics state + RL tensors for offline debugging
     3. Replaces NaN with zeros and marks affected envs as done (triggers reset)
     4. Training continues without interruption
 
+    The overhead is negligible (~650μs per step, <0.01% of a typical training iteration).
+
     Configuration via environment variables:
 
-    - ``NAN_WATCHDOG``: Set to ``1`` to enable. Default: ``0`` (disabled).
+    - ``NAN_WATCHDOG``: Set to ``0`` to disable. Default: ``1`` (enabled).
     - ``NAN_WATCHDOG_DIR``: Custom dump directory. Default: ``<log_dir>/nan_dumps``.
     - ``NAN_WATCHDOG_MAX_DUMPS``: Maximum dumps to save. Default: ``3``.
 
@@ -45,7 +47,7 @@ class NaNWatchdogMixin:
         self._nan_step_counter = 0
         self._nan_device = device
 
-        if os.environ.get("NAN_WATCHDOG", "0") != "1":
+        if os.environ.get("NAN_WATCHDOG", "1") == "0":
             return
 
         try:

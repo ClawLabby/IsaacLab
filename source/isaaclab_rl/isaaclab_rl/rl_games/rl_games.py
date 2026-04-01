@@ -180,6 +180,11 @@ class RlGamesVecEnvWrapper(NaNWatchdogMixin, IVecEnv):
                 f" {self._concate_obs_groups}, and state_space: {self.state_space.__class__}"
             )
 
+        # Initialize NaN watchdog for automatic NaN detection and recovery.
+        # Enabled by default. Disable via env var: NAN_WATCHDOG=0
+        log_dir = getattr(self.unwrapped, "log_dir", None)
+        self._init_nan_watchdog(device=self._rl_device, log_dir=log_dir)
+
     def __str__(self):
         """Returns the wrapper name and the :attr:`env` representation string."""
         return (
