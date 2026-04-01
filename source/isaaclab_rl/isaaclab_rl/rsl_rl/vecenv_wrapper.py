@@ -83,9 +83,14 @@ class RslRlVecEnvWrapper(NaNWatchdogMixin, VecEnv):
         self._modify_action_space()
 
         # Initialize NaN watchdog for automatic NaN detection and recovery.
-        # Enable via env var: NAN_WATCHDOG=1
+        # Enabled by default. Disable via env var: NAN_WATCHDOG=0
         log_dir = getattr(self.unwrapped, "log_dir", None)
         self._init_nan_watchdog(device=self.device, log_dir=log_dir)
+
+        # When the watchdog is active, it handles NaN detection and recovery in the
+        # wrapper's step() — before rsl_rl's runner sees the data. Expose a flag so
+        # the runner can skip its own hard-crash check_for_nan, avoiding conflicts.
+        self.has_nan_watchdog = self._nan_watchdog is not None
 
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()

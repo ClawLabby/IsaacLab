@@ -169,6 +169,11 @@ class Sb3VecEnvWrapper(NaNWatchdogMixin, VecEnv):
         self._ep_rew_buf = np.zeros(self.num_envs)
         self._ep_len_buf = np.zeros(self.num_envs)
 
+        # Initialize NaN watchdog for automatic NaN detection and recovery.
+        # Enabled by default. Disable via env var: NAN_WATCHDOG=0
+        log_dir = getattr(self.unwrapped, "log_dir", None)
+        self._init_nan_watchdog(device=self.sim_device, log_dir=log_dir)
+
     def __str__(self):
         """Returns the wrapper name and the :attr:`env` representation string."""
         return f"<{type(self).__name__}{self.env}>"
