@@ -234,9 +234,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                                 for d in term_dim:
                                     term_size *= d
                                 # Joint-ordered terms: joint_pos, joint_vel, last_action
-                                if term_name in ("joint_pos", "joint_vel", "actions") and term_size == num_joints:
+                                # May include history (e.g., 23 joints × 5 history = 115)
+                                if term_name in ("joint_pos", "joint_vel", "actions") and term_size % num_joints == 0:
                                     obs_remap_slices.append((flat_offset, flat_offset + term_size, 1))
-                                    print(f"  [REMAP] Obs term '{term_name}' at [{flat_offset}:{flat_offset + term_size}]")
+                                    n_hist = term_size // num_joints
+                                    print(f"  [REMAP] Obs term '{term_name}' at [{flat_offset}:{flat_offset + term_size}] ({n_hist}x{num_joints})")
                                 flat_offset += term_size
 
                         joint_remapper._obs_remap_slices = obs_remap_slices
@@ -261,7 +263,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     # remap observations from eval joint order → training joint order
                     if joint_remapper is not None:
                         for start, end, dim_per in joint_remapper._obs_remap_slices:
-                            obs[:, start:end] = joint_remapper.remap_joint_obs(obs[:, start:end])
+                            chunk = obs[:, start:end]
+                            total = end - start
+                            n_blocks = total // joint_remapper.num_joints
+                            for b in range(n_blocks):
+                                b_start = b * joint_remapper.num_joints
+                                b_end = b_start + joint_remapper.num_joints
+                                chunk[:, b_start:b_end] = joint_remapper.remap_joint_obs(chunk[:, b_start:b_end])
+                            obs[:, start:end] = chunk
 
                     # agent stepping
                     actions = policy(obs)
