@@ -217,33 +217,29 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     if joint_remapper.needs_remap:
                         joint_remapper.print_mapping()
 
-                        # Compute observation slices that need joint-order remapping.
-                        # We look for joint_pos, joint_vel, and last_action in the obs layout.
+                        # Compute per-group observation slices that need joint-order remapping.
                         obs_manager = env.unwrapped.observation_manager
-                        obs_remap_slices = []  # list of (start, end) in the flat obs vector
+                        obs_remap_slices = []  # list of (group_name, offset_in_group, size, type)
 
-                        # The flat obs is concatenated as: group1_terms | group2_terms | group3_terms
-                        # where group order comes from obs_manager.active_terms.keys()
-                        flat_offset = 0
                         num_joints = len(eval_joint_names)
                         for group_name in obs_manager.active_terms:
                             term_dims = obs_manager.group_obs_term_dim[group_name]
-                            term_names = obs_manager.active_terms[group_name]  # list of term names
+                            term_names = obs_manager.active_terms[group_name]
+                            group_offset = 0
                             for term_name, term_dim in zip(term_names, term_dims):
                                 term_size = 1
                                 for d in term_dim:
                                     term_size *= d
                                 # Joint-ordered terms: joint_pos, joint_vel, last_action
-                                # May include history (e.g., 23 joints × 5 history = 115)
                                 if term_name in ("joint_pos", "joint_vel", "actions") and term_size % num_joints == 0:
-                                    obs_remap_slices.append((flat_offset, flat_offset + term_size, 1))
+                                    obs_remap_slices.append((group_name, group_offset, term_size, "joint"))
                                     n_hist = term_size // num_joints
-                                    print(f"  [REMAP] Obs term '{term_name}' at [{flat_offset}:{flat_offset + term_size}] ({n_hist}x{num_joints})")
-                                flat_offset += term_size
+                                    print(f"  [REMAP] '{group_name}/{term_name}' offset={group_offset} size={term_size} ({n_hist}x{num_joints})")
+                                group_offset += term_size
 
                         joint_remapper._obs_remap_slices = obs_remap_slices
                         print(f"\n[INFO]: Joint remapping active. {joint_remapper.num_mismatched}/{num_joints} joints remapped.")
-                        print(f"[INFO]: {len(obs_remap_slices)} observation slices will be remapped.\n")
+                        print(f"[INFO]: {len(obs_remap_slices)} observation terms will be remapped.\n")
                     else:
                         print("[INFO]: Joint ordering matches between training and eval. No remapping needed.")
                         joint_remapper = None
@@ -262,15 +258,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 with torch.inference_mode():
                     # remap observations from eval joint order → training joint order
                     if joint_remapper is not None:
-                        for start, end, dim_per in joint_remapper._obs_remap_slices:
-                            chunk = obs[:, start:end]
-                            total = end - start
-                            n_blocks = total // joint_remapper.num_joints
-                            for b in range(n_blocks):
-                                b_start = b * joint_remapper.num_joints
-                                b_end = b_start + joint_remapper.num_joints
-                                chunk[:, b_start:b_end] = joint_remapper.remap_joint_obs(chunk[:, b_start:b_end])
-                            obs[:, start:end] = chunk
+                        for gname, goff, gsz, rtype in joint_remapper._obs_remap_slices:
+                            if rtype != "joint":
+                                continue
+                            group_tensor = obs[gname]
+                            chunk = group_tensor[:, goff:goff + gsz]
+                            nj = joint_remapper.num_joints
+                            flat = chunk.reshape(-1, nj)
+                            remapped = joint_remapper.remap_joint_obs(flat)
+                            group_tensor[:, goff:goff + gsz] = remapped.reshape(chunk.shape)
 
                     # agent stepping
                     actions = policy(obs)
