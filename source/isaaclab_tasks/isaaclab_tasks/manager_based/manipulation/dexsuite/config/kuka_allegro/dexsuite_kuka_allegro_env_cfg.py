@@ -141,6 +141,7 @@ class KukaAllegroEventCfg(PresetCfg):
     default = KukaAllegroPhysxEventCfg()
     newton = dexsuite.EventCfg()
     physx = default
+    physx_no_dr = dexsuite.EventCfg()
 
 
 @configclass
