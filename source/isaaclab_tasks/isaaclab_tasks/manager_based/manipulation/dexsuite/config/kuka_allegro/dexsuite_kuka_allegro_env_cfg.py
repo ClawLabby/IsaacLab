@@ -143,7 +143,9 @@ class KukaAllegroEventCfg(PresetCfg):
 @configclass
 class KukaAllegroRelJointPosActionCfg:
     """Default action config using RelativeJointPosition."""
-    action = mdp.RelativeJointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.1)
+    action = mdp.RelativeJointPositionActionCfg(
+        asset_name="robot", joint_names=[".*"], scale=0.1, preserve_order=True,
+    )
 
 
 @configclass
@@ -155,6 +157,7 @@ class KukaAllegroSmoothedActionCfg:
         scale=0.1,
         smoothing_alpha=0.3,
         max_delta_per_step=0.2,
+        preserve_order=True,
     )
 
 
