@@ -141,6 +141,29 @@ class KukaAllegroEventCfg(PresetCfg):
     default = KukaAllegroPhysxEventCfg()
     newton = dexsuite.EventCfg()
     physx = default
+    physx_no_dr = dexsuite.EventCfg()
+
+
+# Action configuration classes
+@configclass
+class KukaAllegroRelJointPosActionCfg:
+    """Default action config using RelativeJointPosition."""
+    action = mdp.RelativeJointPositionActionCfg(
+        asset_name="robot", joint_names=[".*"], scale=0.1, preserve_order=True,
+    )
+
+
+@configclass
+class KukaAllegroSmoothedActionCfg:
+    """Smoothed action config for better sim2sim transfer."""
+    action = mdp.SmoothedRelativeJointPositionActionCfg(
+        asset_name="robot",
+        joint_names=[".*"],
+        scale=0.1,
+        smoothing_alpha=0.3,
+        max_delta_per_step=0.2,
+        preserve_order=True,
+    )
 
 
 @configclass
