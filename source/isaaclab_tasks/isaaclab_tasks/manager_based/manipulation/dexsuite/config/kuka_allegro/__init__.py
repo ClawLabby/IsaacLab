@@ -59,6 +59,29 @@ gym.register(
 )
 
 
+# Smoothed action variant for sim2sim transfer experiments
+gym.register(
+    id="Isaac-Dexsuite-Kuka-Allegro-Lift-Smoothed-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.dexsuite_kuka_allegro_env_cfg:DexsuiteKukaAllegroLiftSmoothedEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DexsuiteKukaAllegroPPORunnerCfg",
+    },
+)
+
+
+gym.register(
+    id="Isaac-Dexsuite-Kuka-Allegro-Lift-Smoothed-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.dexsuite_kuka_allegro_env_cfg:DexsuiteKukaAllegroLiftSmoothedEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DexsuiteKukaAllegroPPORunnerCfg",
+    },
+)
+
+
 # ResNet18 Feature-Based Environments (framework-agnostic, frozen ResNet)
 gym.register(
     id="Isaac-Dexsuite-Kuka-Allegro-Lift-Single-Camera-ResNet-v0",
