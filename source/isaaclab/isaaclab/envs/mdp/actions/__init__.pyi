@@ -18,6 +18,7 @@ __all__ = [
     "NonHolonomicActionCfg",
     "OperationalSpaceControllerActionCfg",
     "RelativeJointPositionActionCfg",
+    "SmoothedRelativeJointPositionActionCfg",
     "SurfaceGripperBinaryActionCfg",
     "AbsBinaryJointPositionAction",
     "BinaryJointAction",
@@ -28,6 +29,7 @@ __all__ = [
     "JointPositionAction",
     "JointVelocityAction",
     "RelativeJointPositionAction",
+    "SmoothedRelativeJointPositionAction",
     "EMAJointPositionToLimitsAction",
     "JointPositionToLimitsAction",
     "NonHolonomicAction",
@@ -49,6 +51,7 @@ from .actions_cfg import (
     NonHolonomicActionCfg,
     OperationalSpaceControllerActionCfg,
     RelativeJointPositionActionCfg,
+    SmoothedRelativeJointPositionActionCfg,
     SurfaceGripperBinaryActionCfg,
 )
 from .binary_joint_actions import (
@@ -63,6 +66,7 @@ from .joint_actions import (
     JointPositionAction,
     JointVelocityAction,
     RelativeJointPositionAction,
+    SmoothedRelativeJointPositionAction,
 )
 from .joint_actions_to_limits import EMAJointPositionToLimitsAction, JointPositionToLimitsAction
 from .non_holonomic_actions import NonHolonomicAction

@@ -89,11 +89,6 @@ class KukaAllegroSceneCfg(PresetCfg):
 
 
 @configclass
-class KukaAllegroRelJointPosActionCfg:
-    action = mdp.RelativeJointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.1)
-
-
-@configclass
 class KukaAllegroReorientRewardCfg(dexsuite.RewardsCfg):
     good_finger_contact = RewTerm(
         func=mdp.contacts,
@@ -144,6 +139,25 @@ class KukaAllegroEventCfg(PresetCfg):
     physx_no_dr = dexsuite.EventCfg()
 
 
+# Action configuration classes
+@configclass
+class KukaAllegroRelJointPosActionCfg:
+    """Default action config using RelativeJointPosition."""
+    action = mdp.RelativeJointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.1)
+
+
+@configclass
+class KukaAllegroSmoothedActionCfg:
+    """Smoothed action config for better sim2sim transfer."""
+    action = mdp.SmoothedRelativeJointPositionActionCfg(
+        asset_name="robot",
+        joint_names=[".*"],
+        scale=0.1,
+        smoothing_alpha=0.3,
+        max_delta_per_step=0.2,
+    )
+
+
 @configclass
 class KukaAllegroMixinCfg:
     scene: KukaAllegroSceneCfg = KukaAllegroSceneCfg()
@@ -174,4 +188,27 @@ class DexsuiteKukaAllegroLiftEnvCfg(KukaAllegroMixinCfg, dexsuite.DexsuiteLiftEn
 
 @configclass
 class DexsuiteKukaAllegroLiftEnvCfg_PLAY(KukaAllegroMixinCfg, dexsuite.DexsuiteLiftEnvCfg_PLAY):
+    pass
+
+
+# Smoothed action variants for sim2sim transfer experiments
+@configclass
+class KukaAllegroSmoothedMixinCfg(KukaAllegroMixinCfg):
+    """Mixin that uses SmoothedRelativeJointPositionAction instead of RelativeJointPositionAction.
+
+    This produces smoother joint targets that are less sensitive to actuator model differences,
+    improving sim2sim and sim2real transfer robustness.
+    """
+    actions: KukaAllegroSmoothedActionCfg = KukaAllegroSmoothedActionCfg()
+
+
+@configclass
+class DexsuiteKukaAllegroLiftSmoothedEnvCfg(KukaAllegroSmoothedMixinCfg, dexsuite.DexsuiteLiftEnvCfg):
+    """Lift task with smoothed actions for sim2sim transfer."""
+    pass
+
+
+@configclass
+class DexsuiteKukaAllegroLiftSmoothedEnvCfg_PLAY(KukaAllegroSmoothedMixinCfg, dexsuite.DexsuiteLiftEnvCfg_PLAY):
+    """Lift task play config with smoothed actions."""
     pass
