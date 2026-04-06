@@ -65,7 +65,6 @@ parser.add_argument("--video", action="store_true", help="Record video")
 parser.add_argument("--video_length", type=int, default=500)
 parser.add_argument("--output_dir", type=str, default="cross_eval_results")
 parser.add_argument("--label", type=str, default="eval", help="Label for this evaluation")
-parser.add_argument("--device", type=str, default=None)
 add_launcher_args(parser)
 
 # Parse known args, pass rest to hydra
@@ -83,7 +82,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
         # Configure
         env_cfg.scene.num_envs = args_cli.num_envs
         env_cfg.seed = args_cli.seed
-        if args_cli.device:
+        if hasattr(args_cli, 'device') and args_cli.device:
             env_cfg.sim.device = args_cli.device
 
         # Output directory
