@@ -37,6 +37,10 @@ from .observations import (
     vision_camera,
     time_left,
 )
+from .visual_events import (
+    randomize_newton_shape_colors,
+    randomize_observation_color_jitter,
+)
 from .rewards import (
     action_l2_clamped,
     action_rate_l2_clamped,
