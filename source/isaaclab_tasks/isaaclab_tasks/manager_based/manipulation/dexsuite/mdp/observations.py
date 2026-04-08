@@ -220,6 +220,53 @@ class vision_camera(ManagerTermBase):
             if self.sensor_type == "distance_to_image_plane" or self.sensor_type == "depth"
             else self._rgb_norm
         )
+        # Color jitter config
+        self._jitter_enabled = cfg.params.get("color_jitter", False)
+        if self._jitter_enabled:
+            jitter_cfg = cfg.params.get("jitter_params", {})
+            self._brightness_range = jitter_cfg.get("brightness", (0.7, 1.3))
+            self._contrast_range = jitter_cfg.get("contrast", (0.7, 1.3))
+            self._saturation_range = jitter_cfg.get("saturation", (0.7, 1.3))
+
+    def __call__(
+        self, env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, normalize: bool = True,
+        color_jitter: bool = False, jitter_params: dict | None = None,
+    ) -> torch.Tensor:  # obtain the input image
+        images = self.sensor.data.output[self.sensor_type]
+        torch.nan_to_num_(images, nan=1e6)
+        if normalize:
+            images = self.norm_fn(images)
+            if self._jitter_enabled:
+                images = self._apply_jitter(images, env.num_envs, env.device)
+            images = images.permute(0, 3, 1, 2).contiguous()
+        return images
+
+    def _apply_jitter(self, images: torch.Tensor, num_envs: int, device) -> torch.Tensor:
+        """Apply per-env random brightness, contrast, and saturation jitter.
+
+        Images are float [0, ~1] at this point (after /255 but before mean subtraction in _rgb_norm).
+        """
+        blo, bhi = self._brightness_range
+        clo, chi = self._contrast_range
+        slo, shi = self._saturation_range
+
+        # Sample per-env jitter factors (N, 1, 1, 1)
+        brightness = torch.rand(num_envs, 1, 1, 1, device=device) * (bhi - blo) + blo
+        contrast = torch.rand(num_envs, 1, 1, 1, device=device) * (chi - clo) + clo
+        saturation = torch.rand(num_envs, 1, 1, 1, device=device) * (shi - slo) + slo
+
+        # Brightness
+        images = images * brightness
+
+        # Contrast: blend toward per-env mean
+        mean = images.mean(dim=(1, 2, 3), keepdim=True)
+        images = mean + contrast * (images - mean)
+
+        # Saturation: blend toward grayscale
+        gray = images[..., :3].mean(dim=-1, keepdim=True)
+        images[..., :3] = gray + saturation * (images[..., :3] - gray)
+
+        return images
 
     def __call__(
         self, env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, normalize: bool = True

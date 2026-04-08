@@ -173,6 +173,38 @@ class SingleCameraObservationsCfg(StateObservationCfg):
 
 
 @configclass
+class SingleCameraJitterObservationsCfg(StateObservationCfg):
+    """Observation specs with color jitter for visual domain randomization."""
+
+    @configclass
+    class BaseImageObsCfg(ObsGroup):
+        """Camera observations with color jitter."""
+
+        object_observation_b = ObsTerm(
+            func=mdp.vision_camera,
+            noise=Unoise(n_min=-0.0, n_max=0.0),
+            clip=(-1.0, 1.0),
+            params={
+                "sensor_cfg": SceneEntityCfg("base_camera"),
+                "color_jitter": True,
+                "jitter_params": {
+                    "brightness": (0.6, 1.4),
+                    "contrast": (0.6, 1.4),
+                    "saturation": (0.6, 1.4),
+                },
+            },
+        )
+
+    base_image: BaseImageObsCfg = BaseImageObsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        for group in self.__dataclass_fields__.values():
+            obs_group = getattr(self, group.name)
+            obs_group.history_length = None
+
+
+@configclass
 class DuoCameraObservationsCfg(SingleCameraObservationsCfg):
     """Observation specifications for the MDP."""
 

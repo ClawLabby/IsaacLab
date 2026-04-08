@@ -7,6 +7,7 @@ from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
 from isaaclab_physx.physics import PhysxCfg
 
 from isaaclab.assets import ArticulationCfg
+from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensorCfg, TiledCameraCfg
@@ -22,6 +23,7 @@ from .camera_cfg import (
     BaseTiledCameraCfg,
     DuoCameraObservationsCfg,
     SingleCameraObservationsCfg,
+    SingleCameraJitterObservationsCfg,
     StateObservationCfg,
     WristTiledCameraCfg,
 )
@@ -85,6 +87,7 @@ class KukaAllegroSceneCfg(PresetCfg):
 
     default = KukaAllegroSceneCfg(num_envs=4096, env_spacing=3, replicate_physics=True)
     single_camera = default.replace(base_camera=BaseTiledCameraCfg())
+    single_camera_visual_dr = default.replace(base_camera=BaseTiledCameraCfg(), replicate_physics=False)
     duo_camera = default.replace(base_camera=BaseTiledCameraCfg(), wrist_camera=WristTiledCameraCfg())
 
 
@@ -128,6 +131,7 @@ class KukaAllegroReorientRewardCfg(dexsuite.RewardsCfg):
 class KukaAllegroObservationCfg(PresetCfg):
     state = StateObservationCfg()
     single_camera = SingleCameraObservationsCfg()
+    single_camera_jitter = SingleCameraJitterObservationsCfg()
     duo_camera = DuoCameraObservationsCfg()
     default = state
 
@@ -138,9 +142,51 @@ class KukaAllegroEventCfg(PresetCfg):
     class KukaAllegroPhysxEventCfg(dexsuite.StartupEventCfg, dexsuite.EventCfg):
         pass
 
+    @configclass
+    class NewtonVisualDREventCfg(dexsuite.EventCfg):
+        """Newton events + Newton Warp renderer shape color randomization."""
+
+        randomize_shape_colors = EventTerm(
+            func=mdp.randomize_newton_shape_colors,
+            mode="reset",
+            params={
+                "sensor_name": "base_camera",
+                "color_range": (0.1, 0.9),
+            },
+        )
+
+    @configclass
+    class PhysxVisualDREventCfg(dexsuite.StartupEventCfg, dexsuite.EventCfg):
+        """PhysX events + RTX color randomization via Replicator."""
+
+        randomize_object_color = EventTerm(
+            func=mdp.randomize_visual_color,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("object"),
+                "mesh_name": ".*",
+                "event_name": "randomize_object_color",
+                "colors": {"r": (0.1, 0.9), "g": (0.1, 0.9), "b": (0.1, 0.9)},
+            },
+        )
+
+        randomize_table_color = EventTerm(
+            func=mdp.randomize_visual_color,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("table"),
+                "mesh_name": ".*",
+                "event_name": "randomize_table_color",
+                "colors": {"r": (0.1, 0.9), "g": (0.1, 0.9), "b": (0.1, 0.9)},
+            },
+        )
+
     default = KukaAllegroPhysxEventCfg()
     newton = dexsuite.EventCfg()
     physx = default
+    physx_no_dr = dexsuite.EventCfg()
+    newton_visual_dr = NewtonVisualDREventCfg()
+    physx_visual_dr = PhysxVisualDREventCfg()
 
 
 @configclass
