@@ -136,8 +136,9 @@ class randomize_newton_shape_colors(ManagerTermBase):
         color_range: tuple[float, float] = (0.1, 0.9),
         alpha: float = 1.0,
         use_textures: bool = True,
-        num_textures: int = 8,
         texture_resolution: int = 64,
+        randomize_background: bool = True,
+        background_range: tuple[float, float] = (0.0, 0.5),
     ):
         if self._render_context is None:
             return
@@ -158,26 +159,36 @@ class randomize_newton_shape_colors(ManagerTermBase):
         rand_colors[..., 3] = alpha
 
         # Compute flat indices for all shapes in resetting envs
-        # env_ids shape: (n_reset,)
         env_offsets = off + env_ids.to(self._torch_device) * spe  # (n_reset,)
-        # shape_offsets: (n_reset, spe)
         shape_indices = env_offsets.unsqueeze(1) + torch.arange(spe, device=self._torch_device).unsqueeze(0)
-        # Flatten and scatter
-        flat_indices = shape_indices.reshape(-1)  # (n_reset * spe,)
-        flat_colors = rand_colors.reshape(-1, 4)  # (n_reset * spe, 4)
+        flat_indices = shape_indices.reshape(-1)
+        flat_colors = rand_colors.reshape(-1, 4)
         current_colors[flat_indices] = flat_colors
+
+        # Randomize ground plane (global shape 0) color on every reset
+        if randomize_background and off > 0:
+            bg_low, bg_high = background_range
+            bg_color = torch.rand(4, device=self._torch_device)
+            bg_color[:3] = bg_color[:3] * (bg_high - bg_low) + bg_low
+            bg_color[3] = 1.0
+            current_colors[0] = bg_color
 
         self._render_context.shape_colors = wp.from_torch(current_colors, dtype=wp.vec4f)
 
-    def _assign_random_textures(self, num_textures: int, resolution: int):
-        """Generate random procedural textures and assign to shapes.
-        
-        Uses the Newton SensorTiledCamera's built-in checkerboard method as a 
-        starting point, then randomizes the pattern parameters.
+        # Apply procedural textures (checkerboard with random colors)
+        if use_textures:
+            self._apply_checkerboard_texture(texture_resolution)
+
+    def _apply_checkerboard_texture(self, resolution: int):
+        """Apply a randomized checkerboard texture globally.
+
+        Uses Newton's built-in checkerboard with random pattern parameters.
         """
-        # Use the built-in checkerboard with randomized parameters for now
-        # This is the safest approach since it uses the tested code path
-        checker_size = max(2, np.random.randint(2, resolution // 2))
+        if self._newton_sensor is None:
+            return
+
+        # Randomize checkerboard parameters
+        checker_size = max(2, np.random.randint(4, max(8, resolution // 4)))
         self._newton_sensor.assign_checkerboard_material_to_all_shapes(
             resolution=resolution, checker_size=checker_size
         )
