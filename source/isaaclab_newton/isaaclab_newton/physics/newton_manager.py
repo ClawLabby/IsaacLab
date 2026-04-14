@@ -981,13 +981,20 @@ class NewtonManager(PhysicsManager):
         The caller (``step()``) is responsible for calling ``sync_transforms_to_usd()``
         eagerly after ``wp.capture_launch``.
         """
+        # Determine collision mode.
+        # When the Newton collision pipeline is active, collide() must be called
+        # per-substep so that each substep sees up-to-date contact information.
+        # Without per-substep collision, the second substep uses stale contacts
+        # from before the first substep moved objects, causing penetrations in
+        # high-velocity scenarios (e.g. dexterous manipulation).
         if cls._needs_collision_pipeline:
-            cls._collision_pipeline.collide(cls._state_0, cls._contacts)
             contacts = cls._contacts
         else:
             contacts = None
 
         def step_fn(state_0, state_1):
+            if cls._needs_collision_pipeline:
+                cls._collision_pipeline.collide(state_0, contacts)
             cls._solver.step(state_0, state_1, cls._control, contacts, cls._solver_dt)
 
         if cls._use_single_state:
