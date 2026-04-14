@@ -599,7 +599,12 @@ class image_features(ManagerTermBase):
         return {"model": _load_model, "inference": _inference}
 
     def _prepare_resnet_model(self, model_name: str, model_device: str) -> dict:
-        """Prepare the ResNet model for inference.
+        """Prepare a ResNet model as a frozen feature extractor.
+
+        The final fully-connected classification layer is removed so the model outputs
+        spatial features (512-dim for ResNet18/34, 2048-dim for ResNet50/101) instead of
+        1000-dim ImageNet classification logits. This is the standard approach for using
+        pretrained CNNs as feature extractors in RL.
 
         Args:
             model_name: The name of the ResNet model to prepare.
@@ -611,42 +616,42 @@ class image_features(ManagerTermBase):
         from torchvision import models
 
         def _load_model() -> torch.nn.Module:
-            """Load the ResNet model."""
-            # map the model name to the weights
+            """Load a pretrained ResNet model with the FC layer removed."""
             resnet_weights = {
-                "resnet18": "ResNet18_Weights.IMAGENET1K_V1",
-                "resnet34": "ResNet34_Weights.IMAGENET1K_V1",
-                "resnet50": "ResNet50_Weights.IMAGENET1K_V1",
-                "resnet101": "ResNet101_Weights.IMAGENET1K_V1",
+                "resnet18": models.ResNet18_Weights.IMAGENET1K_V1,
+                "resnet34": models.ResNet34_Weights.IMAGENET1K_V1,
+                "resnet50": models.ResNet50_Weights.IMAGENET1K_V1,
+                "resnet101": models.ResNet101_Weights.IMAGENET1K_V1,
             }
-
-            # load the model
-            model = getattr(models, model_name)(weights=resnet_weights[model_name]).eval()
+            if model_name not in resnet_weights:
+                raise ValueError(f"Unsupported ResNet model: {model_name}. Supported: {list(resnet_weights.keys())}")
+            model = getattr(models, model_name)(weights=resnet_weights[model_name])
+            # Remove final FC layer to extract features instead of classification logits.
+            # Output dims: ResNet18/34 -> 512, ResNet50/101 -> 2048.
+            model.fc = torch.nn.Identity()
+            model.eval()
             return model.to(model_device)
 
         def _inference(model, images: torch.Tensor) -> torch.Tensor:
-            """Inference the ResNet model.
+            """Extract features from images using the frozen ResNet model.
 
             Args:
-                model: The ResNet model.
-                images: The preprocessed image tensor. Shape is (num_envs, channel, height, width).
+                model: The ResNet model (FC removed, eval mode).
+                images: Input images. Shape is (num_envs, height, width, channel) in [0, 255].
 
             Returns:
-                The extracted features tensor. Shape is (num_envs, feature_dim).
+                Feature tensor. Shape is (num_envs, feature_dim).
             """
-            # move the image to the model device
             image_proc = images.to(model_device)
-            # permute the image to (num_envs, channel, height, width)
+            # Convert NHWC -> NCHW and scale to [0, 1]
             image_proc = image_proc.permute(0, 3, 1, 2).float() / 255.0
-            # normalize the image
-            mean = torch.tensor([0.485, 0.456, 0.406], device=model_device).view(1, 3, 1, 1)
-            std = torch.tensor([0.229, 0.224, 0.225], device=model_device).view(1, 3, 1, 1)
+            # Apply ImageNet normalization
+            mean = torch.tensor([0.485, 0.456, 0.406], device=model_device, dtype=torch.float32).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=model_device, dtype=torch.float32).view(1, 3, 1, 1)
             image_proc = (image_proc - mean) / std
+            with torch.no_grad():
+                return model(image_proc)
 
-            # forward the image through the model
-            return model(image_proc)
-
-        # return the model, preprocess and inference functions
         return {"model": _load_model, "inference": _inference}
 
 
