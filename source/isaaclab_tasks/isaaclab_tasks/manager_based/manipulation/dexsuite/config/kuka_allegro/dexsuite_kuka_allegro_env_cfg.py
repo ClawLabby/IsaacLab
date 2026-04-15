@@ -22,8 +22,8 @@ from ... import mdp
 from .camera_cfg import (
     BaseTiledCameraCfg,
     DuoCameraObservationsCfg,
-    SingleCameraObservationsCfg,
     SingleCameraJitterObservationsCfg,
+    SingleCameraObservationsCfg,
     StateObservationCfg,
     WristTiledCameraCfg,
 )
@@ -181,12 +181,59 @@ class KukaAllegroEventCfg(PresetCfg):
             },
         )
 
+    @configclass
+    class IsaacRtxVisualDREventCfg(dexsuite.EventCfg):
+        """Newton physics events + Isaac RTX color randomization via Replicator.
+
+        DextrAH-style visual domain randomization: randomize object, table, and
+        robot colors on each episode reset. Uses the Kit Replicator API for
+        material randomization. Suitable for both Newton+RTX and PhysX+RTX configs.
+
+        Note: Does not include physics startup events (material/mass randomization)
+        since those require PhysX. For PhysX+RTX with full physics DR, use
+        PhysxVisualDREventCfg instead.
+        """
+
+        randomize_object_color = EventTerm(
+            func=mdp.randomize_visual_color,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("object"),
+                "mesh_name": ".*",
+                "event_name": "randomize_object_color",
+                "colors": {"r": (0.05, 0.95), "g": (0.05, 0.95), "b": (0.05, 0.95)},
+            },
+        )
+
+        randomize_table_color = EventTerm(
+            func=mdp.randomize_visual_color,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("table"),
+                "mesh_name": ".*",
+                "event_name": "randomize_table_color",
+                "colors": {"r": (0.05, 0.95), "g": (0.05, 0.95), "b": (0.05, 0.95)},
+            },
+        )
+
+        randomize_robot_color = EventTerm(
+            func=mdp.randomize_visual_color,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "mesh_name": ".*",
+                "event_name": "randomize_robot_color",
+                "colors": {"r": (0.1, 0.9), "g": (0.1, 0.9), "b": (0.1, 0.9)},
+            },
+        )
+
     default = KukaAllegroPhysxEventCfg()
     newton = dexsuite.EventCfg()
     physx = default
     physx_no_dr = dexsuite.EventCfg()
     newton_visual_dr = NewtonVisualDREventCfg()
     physx_visual_dr = PhysxVisualDREventCfg()
+    isaac_rtx_visual_dr = IsaacRtxVisualDREventCfg()
 
 
 @configclass
