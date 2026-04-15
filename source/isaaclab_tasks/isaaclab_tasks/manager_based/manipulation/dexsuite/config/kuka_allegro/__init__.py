@@ -84,3 +84,30 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_cnn_cfg:DexsuiteKukaAllegroPPOResNetRunnerCfg",
     },
 )
+
+
+# ResNet18 + Image Augmentation (DextrAH-style visual DR)
+gym.register(
+    id="Isaac-Dexsuite-Kuka-Allegro-Lift-Single-Camera-ResNet-Aug-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.dexsuite_kuka_allegro_vision_env_cfg:DexsuiteKukaAllegroLiftSingleCameraResNetAugEnvCfg"
+        ),
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_cnn_cfg:DexsuiteKukaAllegroPPOResNetRunnerCfg",
+    },
+)
+
+
+gym.register(
+    id="Isaac-Dexsuite-Kuka-Allegro-Lift-Single-Camera-ResNet-Aug-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.dexsuite_kuka_allegro_vision_env_cfg:DexsuiteKukaAllegroLiftSingleCameraResNetAugEnvCfg_PLAY"
+        ),
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_cnn_cfg:DexsuiteKukaAllegroPPOResNetRunnerCfg",
+    },
+)

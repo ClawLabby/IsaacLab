@@ -606,6 +606,11 @@ class image_features(ManagerTermBase):
         1000-dim ImageNet classification logits. This is the standard approach for using
         pretrained CNNs as feature extractors in RL.
 
+        When ``image_augmentation`` is passed in the observation term params, DextrAH-style
+        image-level domain randomization is applied before the ResNet forward pass:
+        brightness, contrast, saturation jitter and optional Gaussian noise. This works
+        with ``replicate_physics=True`` since it operates on the image tensor, not USD prims.
+
         Args:
             model_name: The name of the ResNet model to prepare.
             model_device: The device to store and infer the model on.
@@ -614,6 +619,9 @@ class image_features(ManagerTermBase):
             A dictionary containing the model and inference functions.
         """
         from torchvision import models
+
+        # Read augmentation config from observation term params (if provided)
+        aug_cfg = self.cfg.params.get("image_augmentation", None)
 
         def _load_model() -> torch.nn.Module:
             """Load a pretrained ResNet model with the FC layer removed."""
@@ -632,12 +640,59 @@ class image_features(ManagerTermBase):
             model.eval()
             return model.to(model_device)
 
-        def _inference(model, images: torch.Tensor) -> torch.Tensor:
+        def _apply_image_augmentation(images: torch.Tensor, aug: dict) -> torch.Tensor:
+            """Apply DextrAH-style image augmentation on GPU tensors.
+
+            Operates on NCHW float32 tensors in [0, 1] range. All augmentations are
+            per-image (independent per environment) and differentiable-friendly.
+
+            Args:
+                images: NCHW float32 tensor in [0, 1].
+                aug: Augmentation config dict with optional keys:
+                    - brightness: (low, high) multiplier range. Default (0.7, 1.3).
+                    - contrast: (low, high) multiplier range. Default (0.7, 1.3).
+                    - saturation: (low, high) multiplier range. Default (0.6, 1.4).
+                    - noise_std: Gaussian noise std. Default 0.0 (disabled).
+
+            Returns:
+                Augmented images, same shape and device.
+            """
+            n = images.shape[0]
+            device = images.device
+
+            # Brightness: multiply all channels
+            b_lo, b_hi = aug.get("brightness", (0.7, 1.3))
+            brightness = torch.empty(n, 1, 1, 1, device=device).uniform_(b_lo, b_hi)
+            images = images * brightness
+
+            # Contrast: blend toward per-image mean
+            c_lo, c_hi = aug.get("contrast", (0.7, 1.3))
+            contrast = torch.empty(n, 1, 1, 1, device=device).uniform_(c_lo, c_hi)
+            mean = images.mean(dim=(1, 2, 3), keepdim=True)
+            images = contrast * images + (1.0 - contrast) * mean
+
+            # Saturation: blend toward grayscale
+            s_lo, s_hi = aug.get("saturation", (0.6, 1.4))
+            saturation = torch.empty(n, 1, 1, 1, device=device).uniform_(s_lo, s_hi)
+            # ITU-R BT.601 grayscale weights
+            gray = 0.299 * images[:, 0:1] + 0.587 * images[:, 1:2] + 0.114 * images[:, 2:3]
+            images = saturation * images + (1.0 - saturation) * gray
+
+            # Gaussian noise
+            noise_std = aug.get("noise_std", 0.0)
+            if noise_std > 0:
+                images = images + torch.randn_like(images) * noise_std
+
+            return images.clamp(0.0, 1.0)
+
+        def _inference(model, images: torch.Tensor, image_augmentation: dict | None = None) -> torch.Tensor:
             """Extract features from images using the frozen ResNet model.
 
             Args:
                 model: The ResNet model (FC removed, eval mode).
                 images: Input images. Shape is (num_envs, height, width, channel) in [0, 255].
+                image_augmentation: Optional augmentation config dict. When provided, applies
+                    DextrAH-style image-level DR before the ResNet forward pass.
 
             Returns:
                 Feature tensor. Shape is (num_envs, feature_dim).
@@ -645,6 +700,12 @@ class image_features(ManagerTermBase):
             image_proc = images.to(model_device)
             # Convert NHWC -> NCHW and scale to [0, 1]
             image_proc = image_proc.permute(0, 3, 1, 2).float() / 255.0
+
+            # Apply image-level augmentation if configured (DextrAH-style visual DR)
+            aug = image_augmentation or aug_cfg
+            if aug is not None:
+                image_proc = _apply_image_augmentation(image_proc, aug)
+
             # Apply ImageNet normalization
             mean = torch.tensor([0.485, 0.456, 0.406], device=model_device, dtype=torch.float32).view(1, 3, 1, 1)
             std = torch.tensor([0.229, 0.224, 0.225], device=model_device, dtype=torch.float32).view(1, 3, 1, 1)

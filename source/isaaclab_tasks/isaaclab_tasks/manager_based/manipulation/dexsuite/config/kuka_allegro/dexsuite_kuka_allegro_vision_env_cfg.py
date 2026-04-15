@@ -3,19 +3,15 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import MISSING
 
-import isaaclab.sim as sim_utils
 from isaaclab.envs.mdp import observations as mdp_obs
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import TiledCameraCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 
 from isaaclab_tasks.utils import PresetCfg
-from isaaclab_tasks.utils.presets import MultiBackendRendererCfg
 
 from ... import dexsuite_env_cfg as dexsuite_state_impl
 from ... import mdp
@@ -109,6 +105,46 @@ class KukaAllegroSingleCameraResNetObservationsCfg(camera_cfg.StateObservationCf
 
 
 @configclass
+class KukaAllegroSingleCameraResNetAugObservationsCfg(camera_cfg.StateObservationCfg):
+    """Observation config with ResNet18 features + DextrAH-style image augmentation.
+
+    Image-level domain randomization (brightness, contrast, saturation jitter + noise)
+    is applied before the ResNet forward pass. This works with replicate_physics=True
+    and does not require Replicator or USD material modification.
+    """
+
+    @configclass
+    class ResNetFeaturesAugObsCfg(ObsGroup):
+        """ResNet18 feature extraction with image-level augmentation."""
+
+        resnet_features = ObsTerm(
+            func=mdp_obs.image_features,
+            noise=Unoise(n_min=-0.0, n_max=0.0),
+            params={
+                "sensor_cfg": SceneEntityCfg("base_camera"),
+                "data_type": "rgb",
+                "model_name": "resnet18",
+                "inference_kwargs": {
+                    "image_augmentation": {
+                        "brightness": (0.6, 1.4),
+                        "contrast": (0.6, 1.4),
+                        "saturation": (0.5, 1.5),
+                        "noise_std": 0.02,
+                    },
+                },
+            },
+        )
+
+    resnet_features: ResNetFeaturesAugObsCfg = ResNetFeaturesAugObsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        for group in self.__dataclass_fields__.values():
+            obs_group = getattr(self, group.name)
+            obs_group.history_length = None
+
+
+@configclass
 class KukaAllegroDuoCameraObservationsCfg(KukaAllegroSingleCameraObservationsCfg):
     """Observation specifications for the MDP."""
 
@@ -138,9 +174,22 @@ class KukaAllegroSingleCameraResNetMixinCfg(kuka_allegro_dexsuite.KukaAllegroMix
     """Mixin config for ResNet18 feature-based observations (framework-agnostic, frozen ResNet)."""
 
     scene = KukaAllegroSingleTiledCameraSceneCfg()
-    observations: KukaAllegroSingleCameraResNetObservationsCfg = (
-        KukaAllegroSingleCameraResNetObservationsCfg()
-    )
+    observations: KukaAllegroSingleCameraResNetObservationsCfg = KukaAllegroSingleCameraResNetObservationsCfg()
+
+    def __post_init__(self: kuka_allegro_dexsuite.DexsuiteKukaAllegroLiftEnvCfg):
+        super().__post_init__()
+
+
+@configclass
+class KukaAllegroSingleCameraResNetAugMixinCfg(kuka_allegro_dexsuite.KukaAllegroMixinCfg):
+    """Mixin config for ResNet18 with DextrAH-style image augmentation.
+
+    Uses image-level domain randomization (brightness, contrast, saturation jitter)
+    applied in the ResNet inference pipeline. Works with replicate_physics=True.
+    """
+
+    scene = KukaAllegroSingleTiledCameraSceneCfg()
+    observations: KukaAllegroSingleCameraResNetAugObservationsCfg = KukaAllegroSingleCameraResNetAugObservationsCfg()
 
     def __post_init__(self: kuka_allegro_dexsuite.DexsuiteKukaAllegroLiftEnvCfg):
         super().__post_init__()
@@ -175,6 +224,23 @@ class DexsuiteKukaAllegroLiftSingleCameraResNetEnvCfg(
 class DexsuiteKukaAllegroLiftSingleCameraResNetEnvCfg_PLAY(
     KukaAllegroSingleCameraResNetMixinCfg, dexsuite_state_impl.DexsuiteLiftEnvCfg_PLAY
 ):
+    pass
+
+
+# SingleCamera (ResNet + image augmentation variant)
+@configclass
+class DexsuiteKukaAllegroLiftSingleCameraResNetAugEnvCfg(
+    KukaAllegroSingleCameraResNetAugMixinCfg, dexsuite_state_impl.DexsuiteLiftEnvCfg
+):
+    pass
+
+
+@configclass
+class DexsuiteKukaAllegroLiftSingleCameraResNetAugEnvCfg_PLAY(
+    KukaAllegroSingleCameraResNetMixinCfg, dexsuite_state_impl.DexsuiteLiftEnvCfg_PLAY
+):
+    """Play config uses the non-augmented ResNet (no DR at eval time)."""
+
     pass
 
 
