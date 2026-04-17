@@ -233,6 +233,80 @@ class RelativeJointPositionAction(JointAction):
         self._asset.set_joint_position_target_index(target=current_actions, joint_ids=self._joint_ids)
 
 
+class SmoothedRelativeJointPositionAction(JointAction):
+    r"""Joint action term that applies smoothed relative position commands.
+
+    This action term is similar to :class:`RelativeJointPositionAction` but applies exponential
+    smoothing and optional rate limiting to the position targets. This produces smoother joint
+    commands that are less sensitive to the actuator model implementation, improving sim2sim
+    and sim2real transfer robustness.
+
+    The smoothing is applied as:
+
+    .. math::
+
+        \text{target}_t = \alpha \cdot \text{raw target}_t + (1 - \alpha) \cdot \text{target}_{t-1}
+
+    where :math:`\alpha` is the smoothing factor (1.0 = no smoothing, 0.0 = frozen).
+
+    Optionally, the step-to-step change in the target is clamped to a maximum delta:
+
+    .. math::
+
+        \text{target}_t = \text{target}_{t-1} + \text{clamp}(\text{target}_t - \text{target}_{t-1}, -\Delta_{max}, \Delta_{max})
+
+    The smoothing is reset on environment resets.
+    """
+
+    cfg: actions_cfg.SmoothedRelativeJointPositionActionCfg
+    """The configuration of the action term."""
+
+    def __init__(self, cfg: actions_cfg.SmoothedRelativeJointPositionActionCfg, env: ManagerBasedEnv):
+        # initialize the action term
+        super().__init__(cfg, env)
+        # use zero offset for relative position
+        if cfg.use_zero_offset:
+            self._offset = 0.0
+        # smoothing state: previous smoothed target (initialized to default joint pos)
+        self._prev_target = wp.to_torch(self._asset.data.default_joint_pos)[:, self._joint_ids].clone()
+        # track whether this is the first step after reset
+        self._first_step = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+
+    def reset(self, env_ids: Sequence[int]):
+        super().reset(env_ids)
+        # reset smoothing state to current joint positions for reset envs
+        self._prev_target[env_ids] = wp.to_torch(self._asset.data.joint_pos)[env_ids][:, self._joint_ids]
+        self._first_step[env_ids] = True
+
+    def apply_actions(self):
+        # compute raw (unsmoothed) target: current joint pos + processed action
+        joint_pos = wp.to_torch(self._asset.data.joint_pos)[:, self._joint_ids]
+        raw_target = self.processed_actions + joint_pos
+
+        # on first step after reset, skip smoothing to avoid lag
+        first = self._first_step.unsqueeze(-1)  # (num_envs, 1)
+        self._first_step[:] = False
+
+        # exponential smoothing: target = alpha * raw + (1 - alpha) * prev
+        alpha = self.cfg.smoothing_alpha
+        smoothed = alpha * raw_target + (1.0 - alpha) * self._prev_target
+
+        # rate limiting: clamp step-to-step change
+        if self.cfg.max_delta_per_step is not None and self.cfg.max_delta_per_step > 0:
+            delta = smoothed - self._prev_target
+            delta = torch.clamp(delta, -self.cfg.max_delta_per_step, self.cfg.max_delta_per_step)
+            smoothed = self._prev_target + delta
+
+        # on first step, use raw target (no smoothing)
+        target = torch.where(first, raw_target, smoothed)
+
+        # store for next step
+        self._prev_target = target.clone()
+
+        # set position targets
+        self._asset.set_joint_position_target_index(target=target, joint_ids=self._joint_ids)
+
+
 class JointVelocityAction(JointAction):
     """Joint action term that applies the processed actions to the articulation's joints as velocity commands."""
 

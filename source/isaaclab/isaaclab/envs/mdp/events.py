@@ -188,18 +188,22 @@ class _RandomizeRigidBodyMaterialPhysx:
         # note: this is a workaround since the Articulation does not provide a direct way to obtain the number of shapes
         #  per body. We use the physics simulation view to obtain the number of shapes per body.
         if isinstance(asset, BaseArticulation) and asset_cfg.body_ids != slice(None):
-            self.num_shapes_per_body = []
-            for link_path in asset.root_view.link_paths[0]:
-                link_physx_view = asset._physics_sim_view.create_rigid_body_view(link_path)  # type: ignore
-                self.num_shapes_per_body.append(link_physx_view.max_shapes)
-            # ensure the parsing is correct
-            num_shapes = sum(self.num_shapes_per_body)
-            expected_shapes = asset.root_view.max_shapes
-            if num_shapes != expected_shapes:
-                raise ValueError(
-                    "Randomization term 'randomize_rigid_body_material' failed to parse the number of shapes per body."
-                    f" Expected total shapes: {expected_shapes}, but got: {num_shapes}."
-                )
+            # Newton backend doesn't have link_paths or max_shapes — skip per-body indexing
+            if hasattr(asset.root_view, "link_paths") and hasattr(asset.root_view, "max_shapes"):
+                self.num_shapes_per_body = []
+                for link_path in asset.root_view.link_paths[0]:
+                    link_physx_view = asset._physics_sim_view.create_rigid_body_view(link_path)  # type: ignore
+                    self.num_shapes_per_body.append(link_physx_view.max_shapes)
+                # ensure the parsing is correct
+                num_shapes = sum(self.num_shapes_per_body)
+                expected_shapes = asset.root_view.max_shapes
+                if num_shapes != expected_shapes:
+                    raise ValueError(
+                        "Randomization term 'randomize_rigid_body_material' failed to parse the number of shapes"
+                        f" per body. Expected total shapes: {expected_shapes}, but got: {num_shapes}."
+                    )
+            else:
+                self.num_shapes_per_body = None
         else:
             # in this case, we don't need to do special indexing
             self.num_shapes_per_body = None

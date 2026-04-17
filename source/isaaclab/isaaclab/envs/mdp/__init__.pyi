@@ -30,6 +30,8 @@ __all__ = [
     "OperationalSpaceControllerActionCfg",
     "RelativeJointPositionAction",
     "RelativeJointPositionActionCfg",
+    "SmoothedRelativeJointPositionAction",
+    "SmoothedRelativeJointPositionActionCfg",
     "SurfaceGripperBinaryAction",
     "SurfaceGripperBinaryActionCfg",
     "NormalVelocityCommand",
@@ -169,6 +171,8 @@ from .actions import (
     OperationalSpaceControllerActionCfg,
     RelativeJointPositionAction,
     RelativeJointPositionActionCfg,
+    SmoothedRelativeJointPositionAction,
+    SmoothedRelativeJointPositionActionCfg,
     SurfaceGripperBinaryAction,
     SurfaceGripperBinaryActionCfg,
 )

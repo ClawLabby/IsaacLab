@@ -14,7 +14,13 @@ from isaaclab.utils import configclass
 
 if TYPE_CHECKING:
     from .binary_joint_actions import AbsBinaryJointPositionAction, BinaryJointPositionAction, BinaryJointVelocityAction
-    from .joint_actions import JointEffortAction, JointPositionAction, JointVelocityAction, RelativeJointPositionAction
+    from .joint_actions import (
+        JointEffortAction,
+        JointPositionAction,
+        JointVelocityAction,
+        RelativeJointPositionAction,
+        SmoothedRelativeJointPositionAction,
+    )
     from .joint_actions_to_limits import EMAJointPositionToLimitsAction, JointPositionToLimitsAction
     from .non_holonomic_actions import NonHolonomicAction
     from .surface_gripper_actions import SurfaceGripperBinaryAction
@@ -73,6 +79,42 @@ class RelativeJointPositionActionCfg(JointActionCfg):
     """Whether to ignore the offset defined in articulation asset. Defaults to True.
 
     If True, this flag results in overwriting the values of :attr:`offset` to zero.
+    """
+
+
+@configclass
+class SmoothedRelativeJointPositionActionCfg(JointActionCfg):
+    """Configuration for the smoothed relative joint position action term.
+
+    See :class:`SmoothedRelativeJointPositionAction` for more details.
+    """
+
+    class_type: type["SmoothedRelativeJointPositionAction"] | str = (
+        "{DIR}.joint_actions:SmoothedRelativeJointPositionAction"
+    )
+
+    use_zero_offset: bool = True
+    """Whether to ignore the offset defined in articulation asset. Defaults to True.
+
+    If True, this flag results in overwriting the values of :attr:`offset` to zero.
+    """
+
+    smoothing_alpha: float = 0.3
+    """Exponential smoothing factor. Defaults to 0.3.
+
+    Controls how quickly the smoothed target tracks the raw target:
+    - 1.0: no smoothing (equivalent to RelativeJointPositionAction)
+    - 0.0: frozen (target never changes)
+    - 0.3: moderate smoothing, ~3 steps to reach 90% of a step change
+
+    Lower values produce smoother targets but increase tracking lag.
+    """
+
+    max_delta_per_step: float | None = 0.2
+    """Maximum change in target position per step (radians). Defaults to 0.2 (~11.5°).
+
+    Set to None or 0 to disable rate limiting. When enabled, the step-to-step
+    change in the smoothed target is clamped to this value, preventing sudden jumps.
     """
 
 

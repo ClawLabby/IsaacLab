@@ -147,6 +147,31 @@ class StateObservationCfg(dexsuite.ObservationsCfg):
         )
         self.proprio.hand_tips_state_b.params["body_asset_cfg"].body_names = ["palm_link", ".*_tip"]
 
+        # Fix sim2sim transfer: ensure joint observations use canonical ordering
+        # regardless of physics backend (PhysX=breadth-first, Newton=depth-first)
+        # Explicitly list joints in USD hierarchy order (depth-first traversal)
+        canonical_joint_names = [
+            # Arm joints
+            "iiwa7_joint_1", "iiwa7_joint_2", "iiwa7_joint_3", "iiwa7_joint_4",
+            "iiwa7_joint_5", "iiwa7_joint_6", "iiwa7_joint_7",
+            # Allegro hand joints in depth-first order (all of one finger, then next)
+            "index_joint_0", "index_joint_1", "index_joint_2", "index_joint_3",
+            "middle_joint_0", "middle_joint_1", "middle_joint_2", "middle_joint_3",
+            "ring_joint_0", "ring_joint_1", "ring_joint_2", "ring_joint_3",
+            "thumb_joint_0", "thumb_joint_1", "thumb_joint_2", "thumb_joint_3",
+        ]
+        robot_cfg = SceneEntityCfg("robot", joint_names=canonical_joint_names, preserve_order=True)
+        self.proprio.joint_pos = ObsTerm(
+            func=mdp.joint_pos,
+            params={"asset_cfg": robot_cfg},
+            noise=Unoise(n_min=-0.0, n_max=0.0),
+        )
+        self.proprio.joint_vel = ObsTerm(
+            func=mdp.joint_vel,
+            params={"asset_cfg": robot_cfg},
+            noise=Unoise(n_min=-0.0, n_max=0.0),
+        )
+
 
 @configclass
 class SingleCameraObservationsCfg(StateObservationCfg):
