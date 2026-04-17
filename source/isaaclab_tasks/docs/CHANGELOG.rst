@@ -1,6 +1,19 @@
 Changelog
 ---------
 
+Unreleased
+~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added ``Isaac-Dexsuite-Kuka-Allegro-Lift-Single-Camera-ResNet-v0`` and
+  ``Isaac-Dexsuite-Kuka-Allegro-Lift-Single-Camera-ResNet-Play-v0`` task
+  registrations using frozen ResNet18 feature extraction at the observation level.
+* Added vision environment configs with single-camera and dual-camera presets
+  for DexSuite Kuka Allegro manipulation tasks.
+
+
 1.5.21 (2026-04-13)
 ~~~~~~~~~~~~~~~~~~~
 

@@ -1,6 +1,18 @@
 Changelog
 ---------
 
+Unreleased
+~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Improved :class:`~isaaclab.envs.mdp.observations.image_features` ResNet model
+  preparation: removed the final FC classification layer (extracts 512/2048-dim
+  features instead of 1000-dim logits), added ``torch.no_grad()`` during inference,
+  and improved documentation with feature dimension details.
+
+
 4.6.5 (2026-04-16)
 ~~~~~~~~~~~~~~~~~~~
 
