@@ -13,7 +13,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from isaaclab_newton.physics.newton_manager import NewtonManager
 
 
