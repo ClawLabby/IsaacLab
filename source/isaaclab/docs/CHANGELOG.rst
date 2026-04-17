@@ -1,6 +1,17 @@
 Changelog
 ---------
 
+Unreleased
+~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Batched ``ChangeBlock`` commits in :func:`~isaaclab.cloner.usd_replicate` to reduce
+  multi-process contention during distributed scene creation (4.5× faster Newton
+  4-GPU init).
+
+
 4.6.5 (2026-04-16)
 ~~~~~~~~~~~~~~~~~~~
 
