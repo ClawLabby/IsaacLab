@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import contextlib
+import importlib.metadata as metadata
 import os
 import sys
 import time
@@ -25,6 +26,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from collections import defaultdict
+from packaging import version
 
 # Add the rsl_rl scripts dir to path for cli_args
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -111,6 +113,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
         # Load checkpoint
         checkpoint_path = retrieve_file_path(args_cli.checkpoint)
         print(f"[INFO] Loading checkpoint: {checkpoint_path}")
+        
+        # Handle deprecated rsl-rl config for version compatibility
+        try:
+            installed_version = metadata.version("rsl_rl")
+        except metadata.PackageNotFoundError:
+            installed_version = "5.0.0"  # assume latest
+        agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, installed_version)
         
         agent_cfg.device = env.unwrapped.device
         runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
