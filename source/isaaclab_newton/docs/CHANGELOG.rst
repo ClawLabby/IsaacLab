@@ -1,6 +1,17 @@
 Changelog
 ---------
 
+Unreleased
+~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Fixed per-substep collision in Newton physics — ``collide()`` is now called each
+  substep instead of once before the loop, preventing stale contact data with
+  multiple substeps.
+
+
 0.5.14 (2026-04-14)
 ~~~~~~~~~~~~~~~~~~~
 
