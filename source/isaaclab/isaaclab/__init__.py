@@ -82,6 +82,48 @@ def _deprioritize_prebundle_paths():
 
 _deprioritize_prebundle_paths()
 
+
+def _restore_warp_legacy_namespaces():
+    """Restore deprecated Warp namespaces expected by older Isaac Sim extensions."""
+
+    try:
+        import warp as wp
+    except ImportError:
+        return
+
+    if not hasattr(wp, "context"):
+        try:
+            import warp._src.context as wp_context
+        except ImportError:
+            pass
+        else:
+            wp.context = wp_context
+
+    if hasattr(wp, "types"):
+        for name in ("array", "array2d", "array3d", "array4d"):
+            if not hasattr(wp.types, name) and hasattr(wp, name):
+                setattr(wp.types, name, getattr(wp, name))
+
+        if not hasattr(wp.types, "warp_type_to_np_dtype") and hasattr(wp, "dtype_to_numpy"):
+
+            class _WarpTypeToNumpyDtype:
+                def __getitem__(self, dtype):
+                    return wp.dtype_to_numpy(dtype)
+
+            wp.types.warp_type_to_np_dtype = _WarpTypeToNumpyDtype()
+
+        if not hasattr(wp.types, "np_dtype_to_warp_type") and hasattr(wp, "dtype_from_numpy"):
+
+            class _NumpyDtypeToWarpType:
+                def __getitem__(self, dtype):
+                    return wp.dtype_from_numpy(dtype)
+
+            wp.types.np_dtype_to_warp_type = _NumpyDtypeToWarpType()
+
+
+_restore_warp_legacy_namespaces()
+
+
 ISAACLAB_EXT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 """Path to the extension source directory."""
 
