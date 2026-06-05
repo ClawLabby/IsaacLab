@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import shlex
 import signal
@@ -202,12 +203,19 @@ def _validate_launcher_args(
     _validate_num_gpus_against_visible_devices(parser, args_cli)
 
 
+def _signal_process_group(pgid: int, sig: int) -> None:
+    """Send a signal to a process group, ignoring it if the group already exited."""
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(pgid, sig)
+
+
 def _run_distributed_command(command: list[str]) -> int:
     """Run the distributed launcher and forward termination signals to the child process."""
-    proc = subprocess.Popen(command)
+    proc = subprocess.Popen(command, start_new_session=True)
+    pgid = os.getpgid(proc.pid)
 
-    def _terminate_child(_signum: int, _frame: FrameType | None) -> None:
-        proc.terminate()
+    def _terminate_child(signum: int, _frame: FrameType | None) -> None:
+        _signal_process_group(pgid, signum)
 
     previous_sigterm = signal.signal(signal.SIGTERM, _terminate_child)
     previous_sigint = signal.signal(signal.SIGINT, _terminate_child)
@@ -216,6 +224,7 @@ def _run_distributed_command(command: list[str]) -> int:
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
         signal.signal(signal.SIGINT, previous_sigint)
+        _signal_process_group(pgid, signal.SIGTERM)
 
 
 def _build_torchrun_command(args_cli: argparse.Namespace, train_args: list[str]) -> list[str]:

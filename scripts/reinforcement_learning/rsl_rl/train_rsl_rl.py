@@ -147,38 +147,46 @@ def run(argv: list[str]) -> None:
         configure_io_descriptors(env_cfg, args_cli, logger)
         env_cfg.log_dir = log_dir
 
-        env = create_isaaclab_env(
-            args_cli.task,
-            env_cfg,
-            args_cli,
-            convert_marl_to_single_agent=isinstance(env_cfg, DirectMARLEnvCfg),
-        )
-
-        if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
-            resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
-
-        env = wrap_record_video(env, log_dir, args_cli)
-
-        start_time = time.time()
-        env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
-
-        if agent_cfg.class_name == "OnPolicyRunner":
-            runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
-        elif agent_cfg.class_name == "DistillationRunner":
-            runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
-        else:
-            raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
-
-        runner.add_git_repo_to_log(__file__)
-        if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
-            print(f"[INFO]: Loading model checkpoint from: {resume_path}")
-            runner.load(resume_path)
-
-        dump_train_configs(log_dir, env_cfg, agent_cfg)
-
+        env = None
         try:
-            runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
-            print(f"Training time: {round(time.time() - start_time, 2)} seconds")
-            env.close()
-        except KeyboardInterrupt:
-            pass
+            env = create_isaaclab_env(
+                args_cli.task,
+                env_cfg,
+                args_cli,
+                convert_marl_to_single_agent=isinstance(env_cfg, DirectMARLEnvCfg),
+            )
+
+            if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
+                resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+
+            env = wrap_record_video(env, log_dir, args_cli)
+
+            start_time = time.time()
+            env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+
+            if agent_cfg.class_name == "OnPolicyRunner":
+                runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+            elif agent_cfg.class_name == "DistillationRunner":
+                runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+            else:
+                raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+
+            runner.add_git_repo_to_log(__file__)
+            if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
+                print(f"[INFO]: Loading model checkpoint from: {resume_path}")
+                runner.load(resume_path)
+
+            dump_train_configs(log_dir, env_cfg, agent_cfg)
+
+            try:
+                runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+                print(f"Training time: {round(time.time() - start_time, 2)} seconds")
+            except KeyboardInterrupt:
+                pass
+        finally:
+            try:
+                if env is not None:
+                    env.close()
+            finally:
+                if torch.distributed.is_available() and torch.distributed.is_initialized():
+                    torch.distributed.destroy_process_group()
