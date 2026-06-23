@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
     from isaaclab.utils.warp import ProxyArray
 
 logger = logging.getLogger(__name__)
+
+_SENSOR_TILED_CAMERA_UPDATE_PARAMS = set(inspect.signature(newton.sensors.SensorTiledCamera.update).parameters)
 
 
 class RenderData:
@@ -309,18 +312,27 @@ class NewtonWarpRenderer(BaseRenderer):
         if self.newton_sensor.model.shape_count > 0:
             newton.geometry.refit_bvh_shape(self.newton_sensor.model, newton_state)
 
+        update_kwargs = {
+            "color_image": render_data.outputs.color_image,
+            "albedo_image": render_data.outputs.albedo_image,
+            "depth_image": render_data.outputs.depth_image,
+            "normal_image": render_data.outputs.normals_image,
+            "shape_index_image": render_data.outputs.instance_segmentation_image,
+            # ARGB 93% gray to improve visibility of dark objects and align with RTX renderer background
+            "clear_data": newton.sensors.SensorTiledCamera.ClearData(clear_color=0xFFEEEEEE),
+        }
+        if "hdr_color_image" in _SENSOR_TILED_CAMERA_UPDATE_PARAMS:
+            update_kwargs["hdr_color_image"] = render_data.outputs.hdr_color_image
+        elif render_data.ppisp_pipeline is not None:
+            raise RuntimeError(
+                "The installed Newton SensorTiledCamera.update() does not support hdr_color_image, "
+                "which is required for PPISP rendering."
+            )
         self.newton_sensor.update(
             newton_state,
             render_data.camera_transforms,
             render_data.camera_rays,
-            color_image=render_data.outputs.color_image,
-            hdr_color_image=render_data.outputs.hdr_color_image,
-            albedo_image=render_data.outputs.albedo_image,
-            depth_image=render_data.outputs.depth_image,
-            normal_image=render_data.outputs.normals_image,
-            shape_index_image=render_data.outputs.instance_segmentation_image,
-            # ARGB 93% gray to improve visibility of dark objects and align with RTX renderer background
-            clear_data=newton.sensors.SensorTiledCamera.ClearData(clear_color=0xFFEEEEEE),
+            **update_kwargs,
         )
 
         # Post-render PPISP: HDR scene-linear → LDR RGBA. Source/destination

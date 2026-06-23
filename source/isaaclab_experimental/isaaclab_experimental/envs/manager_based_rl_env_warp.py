@@ -213,6 +213,12 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
         self.reset_terminated = self.termination_manager.terminated
         self.reset_time_outs = self.termination_manager.time_outs
 
+    def step_stable_termination_compute(self) -> None:
+        """Stable fallback stage: compute terminations (env-step frequency)."""
+        self.reset_buf = self.termination_manager.compute()
+        self.reset_terminated = self.termination_manager.terminated
+        self.reset_time_outs = self.termination_manager.time_outs
+
     @Timer(name="env_step", msg="Step took:", enable=DEBUG_TIMER_STEP, time_unit="us")
     def step(self, action: torch.Tensor) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics and reset terminated environments.
@@ -246,6 +252,7 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
         self._manager_call_switch.call_stage(
             stage="ActionManager_process_action",
             warp_call={"fn": self.action_manager.process_action, "kwargs": {"action": self._action_in_wp}},
+            stable_call={"fn": self.action_manager.process_action, "args": (action_device,)},
             timer=DEBUG_TIMER_STEP,
         )
 
@@ -262,6 +269,7 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
             self._manager_call_switch.call_stage(
                 stage="ActionManager_apply_action",
                 warp_call={"fn": self.action_manager.apply_action},
+                stable_call={"fn": self.action_manager.apply_action},
                 timer=DEBUG_TIMER_STEP,
             )
             self._manager_call_switch.call_stage(
@@ -297,11 +305,13 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
         self._manager_call_switch.call_stage(
             stage="TerminationManager_compute",
             warp_call={"fn": self.step_warp_termination_compute},
+            stable_call={"fn": self.step_stable_termination_compute},
             timer=DEBUG_TIMER_STEP,
         )
         self.reward_buf = self._manager_call_switch.call_stage(
             stage="RewardManager_compute",
             warp_call={"fn": self.reward_manager.compute, "kwargs": {"dt": float(self.step_dt)}},
+            stable_call={"fn": self.reward_manager.compute, "kwargs": {"dt": float(self.step_dt)}},
             timer=DEBUG_TIMER_STEP,
         )
 
@@ -310,6 +320,7 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
             self._manager_call_switch.call_stage(
                 stage="ObservationManager_compute_no_history",
                 warp_call={"fn": self.observation_manager.compute, "kwargs": {"return_cloned_output": False}},
+                stable_call={"fn": self.observation_manager.compute},
                 timer=DEBUG_TIMER_STEP,
             )
             self.recorder_manager.record_post_step()
@@ -361,6 +372,10 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
             self._manager_call_switch.call_stage(
                 stage="EventManager_apply_interval",
                 warp_call={"fn": self.event_manager.apply, "kwargs": {"mode": "interval", "dt": float(self.step_dt)}},
+                stable_call={
+                    "fn": self.event_manager.apply,
+                    "kwargs": {"mode": "interval", "dt": float(self.step_dt)},
+                },
                 timer=DEBUG_TIMER_STEP,
             )
 
@@ -373,6 +388,7 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
                 "kwargs": {"update_history": True, "return_cloned_output": False},
                 "output": lambda r: clone_obs_buffer(r),
             },
+            stable_call={"fn": self.observation_manager.compute, "kwargs": {"update_history": True}},
             timer=DEBUG_TIMER_STEP,
         )
         # return observations, rewards, resets and extras
@@ -547,6 +563,14 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
                         "global_env_step_count": self._global_env_step_count_wp,
                     },
                 },
+                stable_call={
+                    "fn": self.event_manager.apply,
+                    "kwargs": {
+                        "mode": "reset",
+                        "env_ids": env_ids,
+                        "global_env_step_count": self._sim_step_counter // self.cfg.decimation,
+                    },
+                },
                 timer=DEBUG_TIMER_RESET,
             )
 
@@ -557,16 +581,19 @@ class ManagerBasedRLEnvWarp(ManagerBasedEnvWarp, gym.Env):
         obs_info = self._manager_call_switch.call_stage(
             stage="ObservationManager_reset",
             warp_call={"fn": self.observation_manager.reset, "kwargs": {"env_mask": env_mask}},
+            stable_call={"fn": self.observation_manager.reset, "args": (env_ids,)},
             timer=DEBUG_TIMER_RESET,
         )
         action_info = self._manager_call_switch.call_stage(
             stage="ActionManager_reset",
             warp_call={"fn": self.action_manager.reset, "kwargs": {"env_mask": env_mask}},
+            stable_call={"fn": self.action_manager.reset, "args": (env_ids,)},
             timer=DEBUG_TIMER_RESET,
         )
         reward_info = self._manager_call_switch.call_stage(
             stage="RewardManager_reset",
             warp_call={"fn": self.reward_manager.reset, "kwargs": {"env_mask": env_mask}},
+            stable_call={"fn": self.reward_manager.reset, "args": (env_ids,)},
             timer=DEBUG_TIMER_RESET,
         )
 

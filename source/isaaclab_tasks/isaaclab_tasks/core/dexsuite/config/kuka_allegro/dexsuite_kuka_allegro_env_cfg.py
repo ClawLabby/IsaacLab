@@ -123,8 +123,22 @@ class DexsuiteKukaAllegroReorientEnvCfg_PLAY(KukaAllegroMixinCfg, dexsuite.Dexsu
 
 
 @configclass
+class DexsuiteKukaAllegroReorientWarpEnvCfg(DexsuiteKukaAllegroReorientEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.manager_call_config = {"default": 0, "Scene": 1}
+
+
+@configclass
 class DexsuiteKukaAllegroLiftEnvCfg(KukaAllegroMixinCfg, dexsuite.DexsuiteLiftEnvCfg):
     pass
+
+
+@configclass
+class DexsuiteKukaAllegroLiftWarpEnvCfg(DexsuiteKukaAllegroLiftEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.manager_call_config = {"default": 0, "Scene": 1}
 
 
 @configclass

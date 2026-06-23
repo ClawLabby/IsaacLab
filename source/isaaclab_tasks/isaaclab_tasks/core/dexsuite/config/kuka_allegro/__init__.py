@@ -27,6 +27,16 @@ gym.register(
 )
 
 gym.register(
+    id="Isaac-Dexsuite-Kuka-Allegro-Reorient-Warp-v0",
+    entry_point="isaaclab_experimental.envs:ManagerBasedRLEnvWarp",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.dexsuite_kuka_allegro_env_cfg:DexsuiteKukaAllegroReorientWarpEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DexsuiteKukaAllegroPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Isaac-Dexsuite-Kuka-Allegro-Reorient-Play-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
@@ -43,6 +53,16 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.dexsuite_kuka_allegro_env_cfg:DexsuiteKukaAllegroLiftEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DexsuiteKukaAllegroPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Isaac-Dexsuite-Kuka-Allegro-Lift-Warp-v0",
+    entry_point="isaaclab_experimental.envs:ManagerBasedRLEnvWarp",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.dexsuite_kuka_allegro_env_cfg:DexsuiteKukaAllegroLiftWarpEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DexsuiteKukaAllegroPPORunnerCfg",
     },
 )

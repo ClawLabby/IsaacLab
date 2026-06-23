@@ -75,7 +75,13 @@ def dispatch_library_entrypoint(
         return 0
 
     module = import_local_module(f"isaaclab_rl_{action}_{args_cli.rl_library}", module_path)
-    module.run(library_args)
+    original_path = list(sys.path)
+    script_dir = str(Path(__file__).resolve().parent)
+    try:
+        sys.path[:] = [path for path in sys.path if path != script_dir]
+        module.run(library_args)
+    finally:
+        sys.path[:] = original_path
     return 0
 
 
